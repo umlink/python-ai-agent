@@ -1,0 +1,19 @@
+# 密钥与环境变量
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 测试与缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 数据与日志
+*.log
+chroma_data/
+storage/
