@@ -12,6 +12,8 @@
 │   ├── api/
 │   │   └── routes.py    # API 接入层路由（/agent/chat）
 │   └── __init__.py
+├── web/
+│   └── index.html       # 零依赖接口调试台（浏览器直接打开，调 /health 与 /agent/chat）
 ├── docs/                # 学习大纲文档（飞书《Python AI Agent 学习计划》拆解）
 │   ├── README.md        # 文档导航总览
 │   ├── 00-专有名词速查表.md
@@ -35,6 +37,9 @@ uvicorn app.main:app --reload --port 8000
 # 健康检查:  GET  http://localhost:8000/health
 # Swagger:   http://localhost:8000/docs
 # 对话接口:  POST http://localhost:8000/agent/chat
+
+# 4. 接口调试（可选）
+# 浏览器直接打开 web/index.html，即可用图形界面调 /health 与 /agent/chat
 ```
 
 ## 学习路线

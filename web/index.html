@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent 服务接口调试台</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --ok: #34d399;
+    --err: #f87171;
+    --warn: #fbbf24;
+    --radius: 10px;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    padding: 32px 20px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { margin-bottom: 24px; }
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: .3px; }
+  header p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  header p code {
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 5px; font-family: var(--mono); font-size: 12px;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px;
+  }
+  .card h2 {
+    font-size: 14px; font-weight: 600; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .tag {
+    font-family: var(--mono); font-size: 11px; font-weight: 400;
+    background: var(--panel-2); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 20px; color: var(--muted);
+  }
+  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  label { font-size: 12px; color: var(--muted); min-width: 64px; }
+  input[type="text"], textarea {
+    flex: 1; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-size: 13px; font-family: var(--mono);
+    outline: none;
+  }
+  input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 72px; }
+  button {
+    background: var(--accent); color: #082f49; border: none;
+    border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  button.secondary {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); font-weight: 400;
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .output {
+    background: #0b1220; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; font-family: var(--mono); font-size: 12.5px;
+    min-height: 96px; max-height: 260px; overflow: auto; white-space: pre-wrap;
+    word-break: break-all; line-height: 1.6;
+  }
+  .output .ok { color: var(--ok); }
+  .output .err { color: var(--err); }
+  .output .muted { color: var(--muted); }
+  .status-line { font-size: 12px; margin-top: 8px; display: flex; gap: 12px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.idle { background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.err { background: var(--err); }
+  .dot.busy { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .meta { color: var(--muted); font-size: 11px; margin-top: 10px; }
+  .meta a { color: var(--accent); text-decoration: none; }
+  .meta a:hover { text-decoration: underline; }
+  .full { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Agent 服务接口调试台</h1>
+    <p>对接 FastAPI 服务（<code>uvicorn app.main:app --reload --port 8000</code>），
+      用于接口调用与 SSE 流式调试。完整接口文档见 <code>/docs</code>（Swagger）。</p>
+  </header>
+
+  <div class="grid">
+    <!-- 健康检查 -->
+    <div class="card">
+      <h2>健康检查 <span class="tag">GET /health</span></h2>
+      <div class="row">
+        <button id="btnHealth">检查</button>
+        <span class="status-line" style="margin:0">
+          <span class="dot idle" id="healthDot"></span>
+          <span id="healthText" class="muted">未检查</span>
+        </span>
+      </div>
+      <div class="output" id="healthOut">点击「检查」查看服务状态。</div>
+    </div>
+
+    <!-- 对话调试 -->
+    <div class="card">
+      <h2>Agent 对话 <span class="tag">POST /agent/chat</span></h2>
+      <div class="row">
+        <label for="question">问题</label>
+        <input type="text" id="question" placeholder="输入要提问的内容，例如：你好" />
+      </div>
+      <div class="row">
+        <label for="session">会话ID</label>
+        <input type="text" id="session" placeholder="可选，用于多轮记忆" />
+      </div>
+      <div class="row">
+        <button id="btnChat">发送</button>
+        <button id="btnClear" class="secondary">清空</button>
+      </div>
+      <div class="output" id="chatOut">输入问题后点击「发送」。</div>
+    </div>
+
+    <!-- 流式输出演示（预留） -->
+    <div class="card full">
+      <h2>SSE 流式输出 <span class="tag">POST /agent/chat/stream（骨架预留）</span></h2>
+      <div class="row">
+        <label for="streamQ">问题</label>
+        <input type="text" id="streamQ" placeholder="流式接口接入后，此处演示打字机效果" />
+        <button id="btnStream" disabled>流式发送</button>
+      </div>
+      <div class="output" id="streamOut" style="min-height:120px">
+        <span class="muted">当前后端骨架尚未提供流式接口。阶段八 Level2/Level5 实现 SSE 后，可在此扩展：</span>
+        <span class="muted">\n1. 后端新增 /agent/chat/stream 返回 StreamingResponse(media_type="text/event-stream")</span>
+        <span class="muted">\n2. 前端用 fetch + ReadableStream 逐块渲染，即可呈现打字机效果。</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="meta">
+    提示：也可直接用 curl 调试 ——
+    <code style="background:var(--panel-2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:11px">
+      curl -X POST http://localhost:8000/agent/chat -H "Content-Type: application/json" -d '{"question":"你好"}'
+    </code>
+  </p>
+</div>
+
+<script>
+  const BASE = "http://localhost:8000";
+
+  function setOutput(el, text, cls) {
+    el.textContent = text;
+    el.className = "output" + (cls ? " " + cls : "");
+  }
+
+  function setHealth(status, text) {
+    const dot = document.getElementById("healthDot");
+    dot.className = "dot " + status;
+    document.getElementById("healthText").textContent = text;
+  }
+
+  async function request(path, options) {
+    const res = await fetch(BASE + path, options);
+    const text = await res.text();
+    let body;
+    try { body = JSON.parse(text); } catch { body = text; }
+    return { ok: res.ok, status: res.status, body };
+  }
+
+  // 健康检查
+  document.getElementById("btnHealth").addEventListener("click", async () => {
+    const btn = document.getElementById("btnHealth");
+    btn.disabled = true;
+    setHealth("busy", "检查中…");
+    setOutput(document.getElementById("healthOut"), "GET /health ...", "");
+    try {
+      const { ok, status, body } = await request("/health");
+      if (ok) {
+        setHealth("ok", "200 OK");
+        setOutput(document.getElementById("healthOut"),
+          JSON.stringify(body, null, 2), "ok");
+      } else {
+        setHealth("err", status + " " + statusText(status));
+        setOutput(document.getElementById("healthOut"),
+          "HTTP " + status + "\n" + JSON.stringify(body, null, 2), "err");
+      }
+    } catch (e) {
+      setHealth("err", "连接失败");
+      setOutput(document.getElementById("healthOut"),
+        "无法连接 " + BASE + "。请确认服务已启动：\nuvicorn app.main:app --reload --port 8000\n\n" + e, "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // 对话
+  document.getElementById("btnChat").addEventListener("click", async () => {
+    const q = document.getElementById("question").value.trim();
+    if (!q) { setOutput(document.getElementById("chatOut"), "请先输入问题。", "err"); return; }
+    const session = document.getElementById("session").value.trim();
+    const btn = document.getElementById("btnChat");
+    btn.disabled = true;
+    const out = document.getElementById("chatOut");
+    setOutput(out, "POST /agent/chat ...", "");
+    try {
+      const payload = { question: q };
+      if (session) payload.session_id = session;
+      const { ok, status, body } = await request("/agent/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (ok) {
+        setOutput(out, JSON.stringify(body, null, 2), "ok");
+      } else {
+        setOutput(out, "HTTP " + status + "\n" + JSON.stringify(body, null, 2), "err");
+      }
+    } catch (e) {
+      setOutput(out, "请求失败：" + e, "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById("btnClear").addEventListener("click", () => {
+    document.getElementById("question").value = "";
+    document.getElementById("session").value = "";
+    setOutput(document.getElementById("chatOut"), "已清空。", "");
+  });
+
+  function statusText(s) {
+    return { 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed",
+             500: "Internal Server Error", 502: "Bad Gateway" }[s] || "";
+  }
+</script>
+</body>
+</html>
