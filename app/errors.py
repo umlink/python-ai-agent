@@ -7,11 +7,17 @@
     {"code": <BizCode>, "message": <描述>, "data": null, "trace_id": ...}
 """
 
-from fastapi import Request
+from fastapi import HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from loguru import logger
 
 from app.schemas.common import BizCode
+
+
+def _trace_of(request: Request) -> str | None:
+    """从 request.state 取追踪 ID（由 RequestID 中间件预置）。"""
+    return getattr(request.state, "trace_id", None)
 
 
 class AppError(Exception):
@@ -77,7 +83,43 @@ def register_exception_handlers(app) -> None:
                 "code": exc.biz_code.value,
                 "message": exc.message,
                 "data": None,
-                "trace_id": request.headers.get("x-request-id"),
+                "trace_id": _trace_of(request),
+            },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(request: Request, exc: RequestValidationError):
+        """参数校验错误（默认 422 原生结构）→ 统一转成 ApiResponse，code=40001。"""
+        first = exc.errors()[0] if exc.errors() else {}
+        loc = ".".join(str(x) for x in first.get("loc", []))
+        detail = first.get("msg", "")
+        message = f"参数校验失败：{loc} {detail}" if loc else f"参数校验失败：{detail}"
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": BizCode.PARAM_ERROR.value,
+                "message": message,
+                "data": None,
+                "trace_id": _trace_of(request),
+            },
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        """FastAPI 原生 HTTPException（如星号路由 404）→ 统一 ApiResponse。"""
+        status_code = exc.status_code
+        code = {
+            401: BizCode.UNAUTHORIZED.value,
+            403: BizCode.FORBIDDEN.value,
+            404: BizCode.NOT_FOUND.value,
+        }.get(status_code, BizCode.INTERNAL_ERROR.value)
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "code": code,
+                "message": str(exc.detail),
+                "data": None,
+                "trace_id": _trace_of(request),
             },
         )
 
@@ -90,6 +132,6 @@ def register_exception_handlers(app) -> None:
                 "code": BizCode.INTERNAL_ERROR.value,
                 "message": BizCode.INTERNAL_ERROR.message,
                 "data": None,
-                "trace_id": request.headers.get("x-request-id"),
+                "trace_id": _trace_of(request),
             },
         )

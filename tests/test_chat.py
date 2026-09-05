@@ -24,10 +24,10 @@ def test_chat_with_session(client):
 
 
 def test_chat_empty_question_422(client):
-    """空问题应被 Pydantic 校验拒绝（422，FastAPI 默认错误结构）。"""
+    """空问题应被 Pydantic 校验拒绝（422，统一 ApiResponse 结构）。"""
     resp = client.post("/agent/chat", json={"question": ""})
     assert resp.status_code == 422
-    assert "detail" in resp.json()
+    assert resp.json()["code"] == 40001
 
 
 def test_chat_missing_field_422(client):

@@ -86,6 +86,3 @@ class Settings(BaseSettings):
 def get_settings_cached() -> Settings:
     """缓存单例 Settings（进程内只解析一次 .env）。"""
     return Settings()
-
-
-settings = get_settings_cached()

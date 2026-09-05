@@ -11,8 +11,9 @@
 """
 
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -20,6 +21,21 @@ from loguru import logger
 from app.api.routes import router
 from app.config import Settings, get_settings_cached
 from app.errors import register_exception_handlers
+
+
+def _request_id_middleware(app: FastAPI):
+    """请求追踪 ID 中间件：优先沿用上游 x-request-id，否则生成，写入 request.state。
+
+    让正常链路（路由 Depends 取 trace_id）与异常链路（exception_handler 取）读同一来源。
+    """
+
+    @app.middleware("http")
+    async def request_id(request: Request, call_next):
+        request.state.trace_id = request.headers.get("x-request-id") or uuid4().hex[:12]
+        response = await call_next(request)
+        # 回写响应头，便于前端与下游追踪
+        response.headers["X-Request-ID"] = request.state.trace_id
+        return response
 
 
 @asynccontextmanager
@@ -53,6 +69,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # 请求追踪 ID 中间件（生成统一 trace_id，先于路由执行）
+    _request_id_middleware(app)
 
     # 业务异常处理器（全局统一转码）
     register_exception_handlers(app)
