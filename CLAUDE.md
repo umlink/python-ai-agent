@@ -65,11 +65,34 @@ app/api（接入层） → app/agents（编排层） → app/tools（工具服�
 - **接口**：Pydantic 声明请求/响应 + `response_model` + `status_code` + `tags`；SSE 用 `StreamingResponse(media_type="text/event-stream")`。
 - **统一响应**：所有成功响应 `ApiResponse.ok(data)`；业务错误 `ApiResponse.fail(BizCode.XXX)`；结构 `{code, message, data, trace_id}`（见 `app/schemas/common.py`）。
 - **SSE 流式**：帧构造一律 `format_sse()`（见 `app/schemas/sse.py`），事件流转 `meta → message_start → (delta/tool_call/tool_result)* → done`，出错先发 `error` 再补 `done` 兜底；禁止路由内手拼帧字符串。
-- **异常**：继承 `AppError`（含 `biz_code` + `http_status`），`register_exception_handlers` 全局转码为统一响应（Pydantic 422 自动处理, 不自定义）。
+- **异常**：继承 `AppError`（含 `biz_code` + `http_status`），`register_exception_handlers` 全局转码为统一响应；`RequestValidationError`（422→`code=40001`）与 `HTTPException` 已接管，所有错误路径一律返回 `{code, message, data, trace_id}`。
+- **追踪链路**：请求 ID 由 `main.py` 的中间件统一生成/沿用并写入 `request.state.trace_id`，路由、异常处理器、`X-Request-ID` 响应头读同一来源，保证正常与异常链路同源。
 - **外呼**：`httpx` 必设 `timeout`；`tenacity` 指数退避重试（默认 `stop_after_attempt(3)`）；幂等才重试。
 - **日志**：统一 `loguru.logger`，带 `trace_id`；Demo 教学文件可用 `print`。
 - **空结果**：如实报空、勿编造，禁止模型补齐不存在的数据。
 - **多租户**：`thread_key(tenant_id, session_id)` 组合会话键（见 `docs/08-阶段八-实战项目路线/05-Level5-…md`）。
+
+## 防过度设计准则（必读）
+
+本仓库是**学习项目 + 生产骨架**的混合体，最容易在「为将来做准备」时把基建做过头。任何新增抽象、分层、依赖、配置，先对照以下红线 —— 命中任意一条即应停下重新审视。
+
+**1. 抽象必须有当下的受益者。** 每新增一层（service / repository / 中间件 / 基类 / 装饰器）先回答：现在有没有代码用它？没有受益者的空壳就是为抽象付费。典型反例：为「将来可能加 service」新建空的 `app/services/`。
+
+**2. 用「推迟到触发时机」替代「提前预埋」。** 基础设施按真实需求点再建，不要一次性铺开。本仓库当前的推迟清单：Alembic 等第一张真实业务表；`/readyz` 等存储层接入后；API Key 鉴权等服务对外开放时；状态持久化等多 worker 真正要共享状态时；RAG 相关未用依赖等阶段四落地前不深层封装。
+
+**3. 单一职责，但不为职责细分而细分。** 允许一个大文件承载一个完整职责（如 `high-level` 服务可适度内聚），不必为「内聚」强行拆包。文件拆分以「读的人会迷路」为标准，而非行数。
+
+**4. 分层方向是硬约束，层数是软约束。** 依赖单向（`api → agents → tools → storage`）必须遵守；但四层各自内部是否再分子层，留给实际复杂度决定，不为「看起来规整」加层。
+
+**5. 全局机制要给，但只给一次。** 统一响应、SSE 协议、异常转码、trace_id 等横切机制做一次、做对，后续一律复用、禁止绕行。与之相对：为单个调用点临时造的轮子（手拼 SSE 帧、散落 `os.getenv`）是漏不是省。
+
+**6. 依赖与配置从简起步。** 新增依赖必须有当下真实用途（见 `requirements.txt` 头部注释）；新增配置项 = `Settings` 加字段 + `.env.example` 补一行。禁止「先装上大概率会用到的」。
+
+**7. 扩展点要「留位置」，不要「做实现」。** 比如 SSE 已预留 `tool_call / tool_result / ping` 事件、SSM 配置、会话态等，位置已定但实现待真实接入。把 do-nothing 的占位实现留在那里，比预写一套将来要返工的实现更好。
+
+**8. 怀疑自己的编辑器视野。** 感到「这里加一层更规范」时，反问：这是让**此刻**读代码的人更清楚，还是满足某种在别处看到的「最佳实践」？后者往往是过度设计。
+
+> 权威版含推迟清单与自查三问：`docs/12-Python开发规范.md` §12。（同维护进 §4 同步触发）
 
 ## 文档索引（新增/修改文档时参考）
 
@@ -84,6 +107,6 @@ app/api（接入层） → app/agents（编排层） → app/tools（工具服�
 1. 新增/移动/删除 `app/` 或 `code/` 下的目录或模块；
 2. 增删依赖（`requirements.txt`）或配置项（`.env.example` / `app/config.py`）；
 3. 新增常用命令（新 Demo、新测试、新脚本）；
-4. 分层或规范发生变更（先改 `docs/12-Python开发规范.md`，再回填本节「核心编码约定」）。
+4. 分层或规范发生变更（先改 `docs/12-Python开发规范.md`，再回填本节「核心编码约定」；防过度设计准则若增删红色条款，同步 §「防过度设计准则」）。
 
 同步时保持**精简**：只记录影响协作的事实（命令/路径/约束），详细论述留在 `docs/` 文档。
