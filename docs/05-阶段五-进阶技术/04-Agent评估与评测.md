@@ -40,6 +40,15 @@ graph TD
 | 作用 | 选模型时横向参考 | Agent 的「回归测试」 |
 | 局限 | 题目 ≠ 你的业务 | 需要花时间维护 |
 
+四个主流公开 Benchmark 各自考什么（评测维度对照）：
+
+| Benchmark | 评测维度 |
+|-|-|
+| **AgentBench** | 多环境工具使用综合（办公 / 游戏 / 数据库等多环境下的工具调用能力） |
+| **GAIA** | 通用助手多步推理（多步推理 + 工具 + 检索的通用助手能力） |
+| **MMLU-Pro** | 知识问答加强版（更难、干扰项更多的知识选择题） |
+| **HumanEval** | 代码生成（函数级代码正确性，pass@k） |
+
 - **自建业务评测集**：把真实业务问题整理成固定用例集：**输入 + 期望要点**（该调什么工具、答案含什么关键词、来源是什么）。每次改 prompt / 换模型后重跑——这就是 Agent 的「回归测试」。
 
 ```python
@@ -139,6 +148,80 @@ class Evaluator:
 
 # 用法: ev = Evaluator(EVAL_CASES, my_agent.run); print(ev.run())
 ```
+
+### 6. 评估工具链落地（LangSmith / Ragas / Langfuse）
+
+自建 evaluate 骨架解决「有没有」，工具链解决「效率与规模化」——trace 全链路可视化、评估结果面板化、团队共享同一套回归集。
+
+#### 6.1 LangSmith：LangChain 生态的追踪 + 评估平台
+
+- **trace 全链路**：Agent 每一步的输入输出（LLM 调用 / 工具执行 / 检索）全记录——bad-case 定位从「翻日志」变成「点开看」；
+- **数据集管理**：评测用例云端版本化，团队共享同一套回归集；
+- **LLM-as-judge 评估器**：内置裁判评估器，跑完自动打分（对照上文三原则）；
+- **生产监控**：线上延迟 / token 消耗 / 失败率实时看板。
+
+```bash
+# 最小接入: 装包 + 两个环境变量, LangChain/LangGraph 的调用自动上报
+pip install langsmith
+export LANGSMITH_TRACING=true
+export LANGSMITH_API_KEY=...
+```
+
+```python
+from langsmith import Client
+
+client = Client()
+client.create_dataset(dataset_name="kb-qa-regression")   # 建评测数据集(用例可逐条加)
+# 跑评估: 指定数据集 + 被测对象 + 评估器, 结果直接进面板
+client.run_on_dataset(
+    dataset_name="kb-qa-regression",
+    llm_or_chain_factory=my_agent,        # 被测的 Agent/链
+    evaluation=my_judge_evaluator,        # LLM-as-judge 或自定义评估器
+)
+```
+
+#### 6.2 Ragas：RAG 专用评估库
+
+RAG 效果光看「答案对不对」不够，还要拆开看「检索质量」——Ragas 的四个核心指标把锅分清楚：
+
+- **faithfulness（忠实度）**：答案是否只基于检索内容、不夹带私货——幻觉率的量化版；
+- **answer_relevancy（答案相关性）**：答案是否切题；
+- **context_precision / context_recall（检索质量）**：召回的片段里多少真有用 / 该召回的召回了多少——直接定位「是检索的锅还是生成的锅」。
+
+```python
+# pip install ragas
+from ragas import evaluate
+from ragas.dataset_schema import EvaluationDataset
+from ragas.metrics import (
+    faithfulness, answer_relevancy, context_precision, context_recall,
+)
+
+ds = EvaluationDataset.from_list([{
+    "user_input": "报销流程是什么?",
+    "retrieved_contexts": ["报销需附发票, 三个工作日内提交..."],  # 检索到的片段
+    "response": "报销需附发票, 三个工作日内提交审批。",           # Agent 的答案
+}])
+report = evaluate(dataset=ds,
+                  metrics=[faithfulness, answer_relevancy,
+                           context_precision, context_recall])
+```
+
+与 LangSmith 集成后，Ragas 的评估结果直接挂到 trace 面板上——检索质量与生成质量在同一视图对齐。
+
+#### 6.3 Langfuse：开源可自托管替代
+
+- 与 LangSmith 同类（trace + 评估 + 监控），但**开源自托管**、OTLP 协议接入，数据不出内网；
+- 对**数据合规敏感的团队**（金融 / 医疗 / 政企）首选——LangSmith 是 SaaS，trace 里难免携带业务数据。
+
+#### 6.4 三者定位对比
+
+| 工具 | 定位 | 一句话取舍 |
+|-|-|-|
+| **LangSmith** | LangChain 生态绑定最深 | 追踪 + 评估 + 监控开箱即用，上手最快 |
+| **Ragas** | RAG 指标专精 | 只管评估不记 trace，与前两者配合使用 |
+| **Langfuse** | 开源可自托管 | 数据合规敏感团队首选，代价是自运维 |
+
+> ⚠️ **先自建小评测集跑通闭环，再接工具链放大效率**：工具链是放大器不是替代品——评测集才是评估的根，没有它，面板再漂亮也只是「看戏更清楚」；有了它，工具链让回归跑得更快、看得更清。
 
 ## 本节自检
 

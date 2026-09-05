@@ -115,12 +115,15 @@ class RoadmapTracker:
 
     def missing_prereq(self, lv: dict, stage_done: set) -> list:
         """检查该 Level 依赖的阶段是否都掌握; 返回仍缺的前置提示"""
-        # 依赖条目形如 "阶段二 ReAct" / "Level1-4 全部能力";
-        # 截取前2个字(如"阶段二")判断该阶段是否已在 stage_done 里
+        # 依赖条目形如 "阶段二 ReAct" / "阶段01-数据分析" / "Level1-4 全部能力";
+        # 截取阶段前缀: 取第一个 "-" 或空格 之前的部分,
+        # 兼容 "阶段二 ReAct"(空格分隔) 与 "阶段01-数据分析"(连字符分隔) 两种命名
         missing = []
         for item in lv["inherits"]:
-            stage = item[:3] if item.startswith("阶段") else None   # "阶段二"
-            if stage and stage not in stage_done:
+            if not item.startswith("阶段"):
+                continue                     # 非 "阶段X" 条目(如 Level1-4)不在此检查
+            stage = item.split("-")[0].split(" ")[0]        # "阶段二" / "阶段01"
+            if stage not in stage_done:
                 missing.append(item)         # 前置阶段没消化 → 记为缺失
         return missing
 

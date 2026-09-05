@@ -5,7 +5,7 @@
 
 ## 精简大纲
 
-1. 四层架构与插件化工具注册中心
+1. 四层架构与插件化工具注册中心（含跨层关注点模块）
 2. 状态持久化（临时 vs 持久）
 3. 容错降级：重试 / 降级 / 熔断
 4. 配置管理与成本优化（Token 统计 / 语义缓存 / 步骤限流）
@@ -20,13 +20,14 @@
 graph LR
     A[接入层<br/>FastAPI路由/鉴权/限流] --> B[编排层<br/>LangGraph图]
     B --> C[工具服务层<br/>各业务工具]
-    C --> D[存储层<br/>Redis/向量库/PG]
+    C --> D[存储层<br/>Redis/向量库/PG/MinIO]
 ```
 
 1. **API 接入层**（FastAPI 路由 / 鉴权 / 限流）
 2. **Agent 编排层**（LangGraph 图）
 3. **工具服务层**（各业务工具）
-4. **存储层**（Redis / 向量库 / PG）
+4. **存储层**（Redis / 向量库 / PG / MinIO）
+   - **MinIO（对象存储）**：放**原始文档、产物文件（图表 / 报告）、大附件**——这类二进制大文件不进 PG 也不进向量库，向量库里只存切片 embedding + MinIO 文件地址。本项目 `app/config.py` 已预置 `minio_endpoint / minio_access_key / minio_secret_key / minio_bucket` 四项配置，启动时从 `.env` 读取即可接上。
 
 - **价值**：换模型不动工具、加工具不改编排——各层依赖单向、可独立替换与测试。
 
@@ -59,6 +60,30 @@ class ToolRegistry:
 ToolRegistry.register("search", search_impl, permission="user")
 ToolRegistry.register("transfer", transfer_impl, permission="admin")   # 高危需admin
 ```
+
+#### 跨层关注点模块：schemas / config / errors / dependencies
+
+四层之外还有一组**横切模块**——不属于任何一层，却被所有层引用，且**不依赖任何业务层**（依赖方向永远指向内，谁都能 import 它们、它们不 import 谁）。本项目 `app/` 的实际落地正是这个结构：`api/ agents/ tools/ storage/` 四个业务层目录 + 下面四个横切模块。
+
+| 模块 | 职责 | 本项目落地 |
+|-|-|-|
+| `schemas/` | 跨层共享的**类型契约** | 请求 / 响应模型、SSE 协议模型（`event: token / done / error`）——api 层出口与 agents 层内部共用同一套模型，序列化格式永不漂移 |
+| `config.py` | 全应用唯一配置入口 | pydantic-settings 读 `.env`（模型密钥 / PG / Redis / MinIO / Qdrant），业务模块禁止散落 `os.getenv` |
+| `errors.py` | 统一错误语义 | `AppError` 基类 + `biz_code` 业务码 + 全局异常处理器——任何层 `raise AppError`，api 层出口自动转成统一 JSON（`code / message / trace_id`） |
+| `dependencies.py` | Depends 注入 | `get_settings`（配置单例）、`get_trace_id`（链路 ID）——需要什么就声明注入什么，不在路由里手动 new |
+
+```python
+# app/errors.py —— 任何层 raise, api 层全局处理器统一转 JSON
+class AppError(Exception):
+    biz_code = BizCode.INTERNAL_ERROR       # 业务码: 前端据此提示
+    http_status = 500
+
+# app/dependencies.py —— 横切能力一律 Depends 注入
+async def get_trace_id(request: Request) -> str:
+    return request.state.trace_id            # 中间件预置, 全链路同一 ID
+```
+
+> 判断一个模块该不该进这组横切层的标准：**被所有层引用、不依赖任何业务层**。若某模块开始 import `agents/` 或 `tools/`，它就不属于横切层，应下沉到对应业务层。
 
 ### 2. 状态持久化
 

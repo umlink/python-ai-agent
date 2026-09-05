@@ -86,6 +86,24 @@ def idempotent_send(recipient, subject, body, seen: set) -> str:
 # 超时重试: 第二次调用因 msg_id 命中已选缓存, 不会发两遍
 ```
 
+生产级版本用 **Redis `SET key value NX EX ttl`** 一条原子命令占位（进程内 `set` 换成 Redis 后，多 worker 并发 / 多实例部署也只发一次）：
+
+```python
+async def idempotent_send_prod(r, biz_no: str, do_send, ttl: int = 3600) -> str:
+    """生产级幂等外发: SETNX 占位成功才执行; 执行失败 DEL 回滚锁"""
+    key = f"idem:send:{biz_no}"                   # 幂等键 = 业务单号(邮件 Message-ID/审批单号)
+    ok = await r.set(key, "1", nx=True, ex=ttl)   # SET key value NX EX ttl, 原子占位
+    if not ok:                                     # 占位失败 = 已有实例在处理/处理过
+        return f"[幂等] {biz_no} 已处理过, 跳过"
+    try:
+        return await do_send()                     # 占位成功才真正外发
+    except Exception:
+        await r.delete(key)                       # 执行失败 → 回滚锁, 允许下次重试
+        raise
+```
+
+> ⚠️ **两个细节决定这把锁靠不靠谱**：① **TTL 必须大于最大执行时长**——外发动作要 30s 而锁只给 10s，锁先过期、重试进来时占位又能成功，照样双发；② **幂等键用业务单号**（邮件 Message-ID、审批单号），**不要用请求体哈希**——哈希对「同一单号、内容微调」的重复请求会漏拦，对「不同单号、内容碰巧相同」的正常请求会误拦。
+
 ### 5. 会议纪要管道
 
 ```mermaid

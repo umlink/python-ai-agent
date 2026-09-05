@@ -7,7 +7,7 @@
 
 1. 客服 Agent 骨架：分流 → 问答（RAG）→ 转人工 / 建工单
 2. 意图分流与工单对接
-3. 生产补全清单：持久化 / 情绪检测 / 权限 / 评测闭环
+3. 生产补全清单：持久化 / 情绪检测 / 权限 / 评测闭环 / PII 脱敏
 
 ## 学习内容详情
 
@@ -70,6 +70,41 @@ def handle(msg: str, user_id: str, kb, perm) -> str:
     return "您好, 我是智能助手, 请问有什么可以帮您?"
 ```
 
+#### 1.3 意图分流的演进：关键词分流 → LLM 意图分类
+
+上面的 `intent_router` 是**冷启动方案**：零成本、零延迟、可解释。但关键词枚举永远追不上用户的长尾表达——「我买的咋还不发货」既不含「订单」也不含「物流」，会被误分到闲聊。标准演进路径分两步：
+
+- **关键词只适合冷启动**：刚上线没流量、不想为每条消息多花一次 LLM 调用时，先用关键词顶着；流量上来后可保留为「快速通道」（命中即短路，省一次分类调用）。
+- **长尾意图靠 LLM 分类**：把意图定义成**枚举**交给 LLM 判断——few-shot 给例子 + 约束 JSON 输出 + 结果过枚举白名单校验，**未命中 / 解析失败一律兜底转人工**（宁可转人，不可错路由）。
+
+```python
+import json
+
+INTENT_ENUM = {"kb", "order", "human", "chitchat"}          # 意图枚举(白名单)
+
+INTENT_PROMPT = """你是客服意图分类器。只输出 JSON, 不输出其他内容。
+可选 intent: kb(知识问答) / order(订单物流) / human(转人工) / chitchat(闲聊)
+
+示例:
+- "退款流程是什么"      → {{"intent": "kb"}}
+- "我的快递到哪了"      → {{"intent": "order"}}
+- "我要投诉, 转人工"    → {{"intent": "human"}}
+- "你好"               → {{"intent": "chitchat"}}
+
+用户消息: {msg}"""
+
+def llm_intent_classify(msg: str, llm) -> str:
+    """LLM 意图分类: few-shot + JSON 输出 + 枚举校验; 未命中兜底转人工"""
+    try:
+        raw = llm.chat(INTENT_PROMPT.format(msg=msg))       # ① 要求 JSON 输出
+        intent = json.loads(raw)["intent"]                   # ② 解析
+        return intent if intent in INTENT_ENUM else "human"   # ③ 枚举白名单校验
+    except Exception:
+        return "human"                                       # ④ 解析失败 → 转人工兜底
+```
+
+> 兜底方向永远是「转人工」而不是「猜一个」——错路由比慢半拍严重得多。
+
 ### 2. 生产补全清单（从「能跑」到「能上生产」）
 
 ```mermaid
@@ -112,6 +147,40 @@ def satisfaction_feedback(session_id: str, score: int, badcases) -> None:
         print(f"[Bad-case] 会话 {session_id} 低分({score}) 已入队, 供每周评测归类")
 ```
 
+5. **对话日志 PII 脱敏（合规必选）：** 客服对话天然携带姓名 / 手机号 / 身份证 / 银行卡 / 订单号——**落日志前、送模型前必须先过统一脱敏层**，不能让原文裸奔进日志文件和第三方模型 API。
+
+```python
+import re
+
+# 掩码规则(顺序执行): 身份证留首4尾4 / 银行卡留首6尾4 / 手机号 138****1234 / 姓名中间掩码
+ID_RE    = re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")              # 身份证 18 位(末位可X)
+BANK_RE  = re.compile(r"(?<!\d)\d{16,19}(?!\d)")                 # 银行卡 16-19 位
+PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")              # 手机号 11 位
+NAME_RE  = re.compile(r"([\u4e00-\u9fa5]{2,4})(先生|女士|经理)")   # 姓名+称谓
+
+def _mask(s: str, keep_head: int, keep_tail: int) -> str:
+    """保留首尾、中间打星(等长掩码): 13812341234 → 138****1234"""
+    return s[:keep_head] + "*" * (len(s) - keep_head - keep_tail) + s[-keep_tail:]
+
+def mask_name(name: str) -> str:
+    """中文姓名中间掩码: 两字留首(张伟→张*), 三字及以上留首尾(欧阳锋→欧*锋)"""
+    return name[0] + "*" * (len(name) - 1) if len(name) <= 2 else \
+        name[0] + "*" * (len(name) - 2) + name[-1]
+
+def mask_pii(text: str) -> str:
+    """入口层统一脱敏: 落日志前 / 送模型前都调它; 原文只留加密存储"""
+    text = ID_RE.sub(lambda m: _mask(m.group(), 4, 4), text)
+    text = BANK_RE.sub(lambda m: _mask(m.group(), 6, 4), text)
+    text = PHONE_RE.sub(lambda m: _mask(m.group(), 3, 4), text)
+    text = NAME_RE.sub(lambda m: mask_name(m.group(1)) + m.group(2), text)
+    return text
+
+print(mask_pii("张伟先生手机 13812341234, 身份证 110101199001011234, 卡 6222020200112233445"))
+# 张*先生手机 138****1234, 身份证 1101**********1234, 卡 622202*********3445
+```
+
+> ⚠️ **PIPL / GDPR 下「入日志即合规风险」**：明文 PII 只要落进日志文件（哪怕从未外发）就已触发合规义务与泄露连带责任。正确姿势是**在入口层统一脱敏**（日志与模型请求共用同一层），确实需要原文的场景（如工单系统回填完整手机号）走**加密存储 + 授权角色解密**，而不是在日志里留明文「备查」。
+
 ### 3. 设计要点小结
 
 - **骨架** = 意图分流 → RAG 问答 → 转人工 / 工单；**兜底优先级高于答对**——答不出时宁可转人，别硬答出错。
@@ -120,5 +189,7 @@ def satisfaction_feedback(session_id: str, score: int, badcases) -> None:
 ## 本节自检
 
 - [ ] 能搭出「分流 → RAG 问答 → 转人工 / 工单」的客服 Agent 骨架
+- [ ] 能说清「关键词分流 → LLM 意图分类」的演进路径与未命中转人工兜底
 - [ ] 能说清多租户隔离（thread_id）与情绪转人工的落地点
 - [ ] 能实现满意度低分自动进 Bad-case 队列
+- [ ] 能实现对话日志的 PII 脱敏（手机号 / 身份证 / 银行卡 / 姓名掩码）

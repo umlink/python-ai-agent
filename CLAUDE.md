@@ -30,6 +30,7 @@ pytest                               # 关键接口单测（tests/）
 make dev / make test / make lint      # 等价上面命令的快捷方式
 docker compose up -d                  # 一键拉起 PG/Redis/MinIO/Qdrant
 docker build -t python-ai-agent:latest .   # 构建服务镜像
+```
 
 ## 目录结构（速览）
 

@@ -15,7 +15,7 @@
 
 ## 学习内容详情
 
-> 版本说明：以下基于 LangChain 0.3.x（2025 主流版本），0.1 及以下 API 差异较大；认准 LCEL 与 LangGraph，旧教程的 `LLMChain` / `initialize_agent` 已废弃。
+> 版本说明：以下基于 LangChain 0.3.x API 基线（该大版本 API 稳定，后续小版本兼容），0.1 及以下 API 差异较大；认准 LCEL 与 LangGraph，旧教程的 `LLMChain` / `initialize_agent` 已废弃。
 
 ### 1. ChatModel（模型封装）
 
@@ -93,6 +93,70 @@ print(text)   # 已经是纯字符串, 不用再取 .content
 ```
 
 > **一句话理解 LCEL**：就是把"先 A 再 B 再 C"写成 `A | B | C`。组件之间自动做类型对接，少写大量样板代码。
+
+#### 3.1 LCEL 实战：Agent 场景的并行、子链与工具调用
+
+三个生产高频玩法，全部用 LCEL 原生能力完成，不引入任何新框架（`@tool` / `bind_tools` 的正式讲解在第 4 节，这里先看它们如何嵌进管道）：
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableLambda, RunnableParallel
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+
+# OpenAI 兼容风格: 换 base_url 即可切 DeepSeek / Qwen / Ollama
+llm = ChatOpenAI(
+    model="deepseek-chat",
+    api_key="YOUR_KEY",
+    base_url="https://api.deepseek.com/v1",
+    temperature=0.2,
+)
+
+# ---- 玩法1: RunnableParallel —— 「检索」与「问题改写」两路同时跑 ----
+def retrieve(query: str) -> str:
+    """模拟向量检索, 返回召回的参考资料。"""
+    return f"[{query}] 召回的资料: Agent = LLM + 记忆 + 工具 + 规划..."
+
+def rewrite(query: str) -> str:
+    """把口语化的模糊问题补全成完整、无歧义的问题。"""
+    return f"请说明 {query} 的核心概念与典型应用场景"
+
+fan_out = RunnableParallel(
+    docs=RunnableLambda(retrieve),      # 路A: 拿原问题直接检索
+    question=RunnableLambda(rewrite),   # 路B: 同时补全问题, 两路互不等待
+)
+# 输出形如 {"docs": "...", "question": "..."}, 正好对上子链的两个占位变量
+
+# ---- 玩法2: 子链组合 —— 「格式化上下文 | llm | 解析」封装一次, 处处复用 ----
+format_prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一位严谨的助手, 只依据给定资料回答。"),
+    ("human", "资料:\n{docs}\n\n问题: {question}"),
+])
+answer_chain = format_prompt | llm | StrOutputParser()   # ← 可复用的子链
+
+# 玩法1 + 玩法2 串起来: 并行产出 → 直接喂给子链
+qa_chain = fan_out | answer_chain
+print(qa_chain.invoke("Agent 是什么"))
+
+# ---- 玩法3: LCEL 里调工具 —— bind_tools 后接自定义 Runnable Lambda 执行 ----
+@tool
+def query_order(order_id: str) -> str:
+    """查询订单的物流状态。当用户询问订单进度时调用。"""
+    return f"订单{order_id}: 已发货, 预计3日内送达"
+
+llm_with_tools = llm.bind_tools([query_order])
+
+def run_tool_calls(ai_msg):
+    """自定义 Runnable Lambda: 执行模型返回的 tool_calls, 拼装工具结果。"""
+    results = [query_order.invoke(call["args"]) for call in ai_msg.tool_calls]
+    return "\n".join(results) if results else ai_msg.content
+
+tool_chain = llm_with_tools | RunnableLambda(run_tool_calls)
+print(tool_chain.invoke("我的订单 A1024 到哪了?"))
+```
+
+> ⚠️ LCEL 是「管道组合」思维，擅长把固定流程串成一条直线。一旦出现「调完工具看结果、再决定走哪条分支」这类**超过两层的复杂分支逻辑**，就该考虑 LangGraph 的条件边，而不是用 Runnable 嵌套 if/else 硬拼——那会把管道拼成面条代码。
 
 ### 4. 工具体系（第四大件）
 

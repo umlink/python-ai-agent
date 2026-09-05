@@ -37,7 +37,7 @@ graph TD
 - **状态持久化**：Checkpointer + 存储后端（Redis / Postgres）；服务重启任务状态不丢（对照阶段五断点、阶段七部署）。
 - **权限控制**：敏感操作（查订单 / 工单）按角色权限分级；高危动作人工审批。
 - **监控告警**：任务成功率 / LLM 失败率告警 + 完整链路日志（对照阶段七监控）。
-- **部署**：Docker Compose 一键拉起「应用 + worker + Redis + PG + Qdrant」（对照阶段七 docker-compose）。
+- **部署**：Docker Compose 一键拉起「应用 + worker + Redis + PG + Qdrant」（对照阶段七 docker-compose）；生产规模上 K8s + HPA（呼应[阶段七 02《部署与伸缩》](../07-阶段七-工程化部署与运维/02-部署与伸缩.md)），Docker Compose 用于开发与演示。
 
 ### 2. 必须落地的工程实践
 
@@ -52,11 +52,40 @@ def thread_key(tenant_id: str, session_id: str) -> str:
     return f"{tenant_id}:{session_id}"
 ```
 
+### 3. 合规与审计（企业级必选项）
+
+企业级与「能跑」的分水岭不是功能数量，而是合规能力——缺这一节，系统进不了企业采购清单。
+
+**a) 审计日志**：所有敏感操作（查订单、创建工单、权限变更、转人工）统一记录四要素——**谁**（user_id）、**何时**（时间戳 + trace_id 串联完整链路）、**做了什么**（工具 + 参数）、**结果**（成功 / 失败 + 摘要）。审计日志落**独立只追加（append-only）存储**，不与业务日志混放（业务日志滚动清理，审计日志须可追溯数年）。
+
+```python
+import json, time
+
+def audit_log(user_id, trace_id, action, params, ok, summary, sink) -> None:
+    """敏感操作审计: 谁/何时/做了什么/结果 —— 独立 append-only 存储"""
+    sink.append(json.dumps({          # 生产: append-only 表/日志桶, 不给 UPDATE/DELETE 权限
+        "ts": round(time.time(), 3), "user_id": user_id, "trace_id": trace_id,
+        "action": action, "params": params,    # 如 {"tool": "query_order", "order_id": "A1024"}
+        "result": "ok" if ok else "fail", "summary": summary[:100],
+    }, ensure_ascii=False))
+
+# 查订单 / 建工单 / 权限变更 / 转人工 四类敏感操作出口统一调用
+audit_log("u_1001", "tr_8f2a", "query_order", {"order_id": "A1024"},
+          ok=True, summary="返回脱敏后订单摘要", sink=audit_store)
+```
+
+**b) PII 与数据分级**：三级——**明文**（非敏感业务标识，如订单号）/ **掩码**（默认展示层，手机号 138****1234）/ **加密**（原文密文落库，授权后解密）。手机号默认掩码展示，**完整值仅授权角色可见**（客服主管，或用户本人核身通过后），对照阶段六客服的 PII 脱敏小节。
+
+**c) 数据驻留与保留期限**：GDPR / PIPL 要求数据不出境 / 境内存储——选境内区域 + 自托管观测（LangFuse 而非境外 SaaS）；用户有权请求数据删除（被遗忘权）。对话记录设保留期限（如 **180 天**）到期自动清理——定时任务同时清掉 PG 与向量库里的副本（对照阶段四：入库的 embedding 也是个人数据）。
+
+> ⚠️ **合规是采购评审的否决项**：企业采购评审里安全与合规一票否决——功能再花哨，没有审计日志与数据分级直接出局。Level5 演示至少要落地**审计日志**这一项。
+
 ## 本节验收清单
 
 - [ ] Docker Compose 一键部署整套环境并跑通
 - [ ] 状态落库 + 中断恢复验证（重启进程任务不丢）
 - [ ] 有多租户隔离与权限分级
+- [ ] 敏感操作有独立审计日志（append-only，可用 trace_id 串起完整链路）
 - [ ] 有完整链路日志 + 至少一项业务监控告警
 - [ ] 有自建评测集并跑过一轮迭代闭环
 

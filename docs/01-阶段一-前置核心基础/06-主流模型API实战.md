@@ -45,6 +45,54 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
+#### 1.2 Claude 原生 SDK 对照
+
+海外直连 Claude 不走 OpenAI 兼容格式，而是用官方 `anthropic` SDK——整体写法高度相似，但有三处结构差异要记牢。
+
+```bash
+pip install anthropic
+```
+
+```python
+import os
+from anthropic import Anthropic
+
+client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+resp = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,                              # 必传: 限制输出长度
+    system="你是一位严谨的技术助手。",               # 差异1: system 是顶层参数, 不塞进 messages
+    messages=[{"role": "user", "content": "用一句话介绍 Agent"}],
+)
+
+# 差异2: 响应是 content blocks 列表, 文本要取每个块的 .text
+print("".join(b.text for b in resp.content if b.type == "text"))
+```
+
+流式则换成 `client.messages.stream(...)`（上下文管理器，逐事件消费）：
+
+```python
+with client.messages.stream(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    system="你是一位严谨的技术助手。",
+    messages=[{"role": "user", "content": "写一段300字介绍AI Agent"}],
+) as stream:
+    for text in stream.text_stream:     # text_stream 只吐文本增量, 相当于 delta.content
+        print(text, end="")
+```
+
+与 OpenAI 格式的三个差异点：
+
+| 差异点 | OpenAI 兼容写法 | Claude 原生写法 |
+|-|-|-|
+| system 位置 | messages 首条 `{"role": "system", ...}` | 顶层参数 `system="..."` |
+| 响应结构 | `resp.choices[0].message.content`（字符串） | `resp.content` 是 content blocks 列表，文本块要取 `.text` |
+| 工具调用 | `tools` / `tool_choice` | 参数同名、无独立命名差异，照常支持 function calling |
+
+> ⚠️ 国内生产环境常用 DeepSeek / Qwen 的 OpenAI 兼容接口，Claude 原生 SDK 主要用于海外模型直连；两者切换成本就集中在「system 位置」与「content 结构」这两处，改对它们基本就完成了平移。
+
 ### 2. 流式调用（stream=True）
 
 #### 2.1 为什么流式重要

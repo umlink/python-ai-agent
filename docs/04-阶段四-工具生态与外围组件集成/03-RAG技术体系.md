@@ -69,6 +69,26 @@ def split_into_chunks(text: str, chunk_size: int = 200, overlap: int = 40) -> li
     return chunks
 ```
 
+#### 1.4 chunking 策略对比（生产选型）
+
+固定长度只是「教学基线」，生产分块要按语料形态选策略：
+
+- **固定长度 + 重叠**：实现最简单（即上面 `split_into_chunks`），问题是机械切割、割裂语义——关键论点可能被边界拦腰斩断。
+- **递归字符分块**：按 `段落 → 句子 → 字符` 逐级回退——块太大先按段落切，段落还大再按句子切，兜底才按字符切。LangChain `RecursiveCharacterTextSplitter` 的默认推荐，通用语料首选。
+- **标题感知分块**：按 Markdown / HTML 的标题结构切，并把「标题路径」写进 chunk 元数据（如 `产品手册 > 安装 > 环境要求`）——检索时可按标题过滤，生成时标题路径就是现成上下文。技术文档首选。
+- **语义分块**：相邻句子算 embedding 相似度，相似度骤降处即语义断点——边界最自然，但每句都要过一次 embedding，开销最大。
+- **父子分块（small-to-big）**：小块用于检索（命中更准），命中后返回其所属大块供生成（上下文更全）——LlamaIndex 的 small-to-big 模式。
+
+| 策略 | 边界质量 | 成本 | 适用场景 |
+|-|-|-|-|
+| 固定长度 + 重叠 | 差（易腰斩论点） | 最低 | 基线 / 快速验证 |
+| 递归字符分块 | 中 | 低 | 通用语料默认选择 |
+| 标题感知分块 | 高（结构天然对齐） | 低 | Markdown / HTML 技术文档 |
+| 语义分块 | 最高（边界最自然） | 高（全量过 embedding） | 高价值语料、长叙述文本 |
+| 父子分块 | 高（检得准 + 上下文全） | 中（存两套块） | 检索准但生成缺上下文时 |
+
+> ⚠️ **分块策略没有银弹**：别靠感觉选——先拿 20 条真实 query，分别用候选策略跑 recall@5 对比召回率，数据说话再定。
+
 ### 2. 高级 RAG 技术（生产标配）
 
 #### 2.1 四件套总览
@@ -124,6 +144,37 @@ def retrieve(question: str, vector_col, llm, ttl: int = 600) -> dict:
     _cache[key] = {"answer": answer, "ts": time.time()}
     return {"answer": answer, "cached": False, "context": context}
 ```
+
+#### 2.3 多轮迭代检索与 Cross-Encoder Rerank（最小代码）
+
+四件套里「多轮迭代检索」「片段重排序」两个只有文字描述，补上最小实现：
+
+```python
+# ---- ① 多轮迭代检索: 检索 → 判据缺失 → 改写再检索, 直到判据齐或轮次用完 ----
+def iterative_retrieve(question, vector_col, llm, max_rounds=3) -> list:
+    query, evidence = question, []
+    for round in range(max_rounds):
+        hits = vector_col.query(query_embeddings=[embed_bge(query)], n_results=3)
+        evidence += hits["documents"][0]
+        missing = llm.invoke(          # 判据检查: 回答还缺什么关键信息?
+            f"问题:{question}\n已检索到:{evidence}\n"
+            "若信息已足够回答只输出 DONE, 否则输出一个改写后的检索查询。")
+        if "DONE" in missing:
+            break                      # 判据齐全, 提前收手(省 token)
+        query = missing.strip()        # 缺什么就带什么改写再检索
+    return evidence
+
+# ---- ② Cross-Encoder Rerank: (query, chunk) 成对精算分, 排序取 top_k ----
+def rerank(query: str, candidates: list, cross_encoder, top_k=3) -> list:
+    """candidates 是召回的 top-20; cross_encoder 如 BAAI/bge-reranker 系模型"""
+    pairs = [(query, chunk) for chunk in candidates]     # 每对 拼在一起精算
+    scores = cross_encoder.predict(pairs)                # 相关性打分(准但慢)
+    ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+    return [c for c, _ in ranked[:top_k]]                # 精排后只取 top-3
+```
+
+- 多轮迭代检索在生产里通常由 Agent 的重试循环天然实现（工具描述写清「可重试」），上面的骨架是把它显式写成循环的样子。
+- Rerank 要点：召回阶段便宜粗筛 top-20，Cross-Encoder 只精排这 20 条（它逐对计算、慢）——即小点 2 的两段式检索。
 
 ### 3. 普通 RAG vs Agent 内部 RAG
 
