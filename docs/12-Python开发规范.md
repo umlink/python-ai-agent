@@ -11,7 +11,7 @@
 ├─ app/                  # FastAPI 服务骨架（阶段七部署到 API 的核心）
 │  ├─ main.py            # 应用实例 + 生命周期 + 全局异常处理器
 │  ├─ config.py          # pydantic-settings 配置（读取 .env）
-│  ├─ schemas.py         # 请求/响应 Pydantic 模型
+│  ├─ schemas/           # 请求/响应 Pydantic 模型（按域拆分）
 │  ├─ dependencies.py    # 可复用依赖（Depends：会话 / 鉴权 / 配置）
 │  ├─ api/               # 路由（routers），按资源拆分
 │  ├─ agents/            # Agent 编排层（阶段七扩展）
@@ -28,7 +28,7 @@
 
 - 新增可复用的非服务工具放 `app/tools/`（详见第 5 节），新增教学示例放对应 `code/阶段N/`。
 
-- **FastAPI 目录对齐官方 Bigger Applications 惯例**：路由按资源拆到 `api/` 各文件、`dependencies.py` 集中放 `Depends` 依赖、`schemas.py` 放模型 [$TRAE\_REF](https://fastapi.tiangolo.com/tutorial/bigger-applications/#apirouter)。
+- **FastAPI 目录对齐官方 Bigger Applications 惯例**：路由按资源拆到 `api/` 各文件、`dependencies.py` 集中放 `Depends` 依赖、`schemas/` 目录放模型 [$TRAE\_REF](https://fastapi.tiangolo.com/tutorial/bigger-applications/#apirouter)。
 
 ## 2. app/ 分层架构与各层抽象
 
@@ -51,7 +51,7 @@ graph TD
     C --> D[存储层 app/storage]
 ```
 
-当前骨架已具备 `app/main.py`、`app/api/routes.py`、`app/schemas.py`；`app/agents` / `app/tools` / `app/storage` 按需新增（阶段七扩展时落地）。
+当前骨架已具备 `app/main.py`、`app/api/routes.py`、`app/schemas/`；`app/agents` / `app/tools` / `app/storage` 按需新增（阶段七扩展时落地）。
 
 ### 2.1 分层职责与引用规则
 
@@ -73,7 +73,7 @@ graph TD
 | 模块文件           | 小写下划线 `snake_case.py`                     | `routes.py` / `llm_client.py` |
 | 包目录            | 小写下划线，含 `__init__.py`                     | `app/api/` / `app/tools/`     |
 | 教学 Demo        | 语义化小写，一个文件一个主题                            | `react_agent.py`              |
-| 数据模型           | `schemas.py` 集中，或 `*_models.py`           | `schemas.py`                  |
+| 数据模型           | `schemas/` 目录按域拆分，`__init__.py` 统一导出     | `app/schemas/chat.py`        |
 | 可复用依赖          | `dependencies.py`（放 `Depends` 函数）         | `dependencies.py`             |
 | 常量/配置          | `config.py`（pydantic-settings `Settings`） | `config.py`                   |
 | 命名 `.markdown` | 中文语义化 + 阶段编号                              | `docs/07-…/01-Agent工程化…md`    |
@@ -88,7 +88,7 @@ graph TD
 
 - 路由集中注册：`app/api/` 下 `APIRouter(prefix=..., tags=[...])`，统一在 `main.py` `include_router`。
 
-- 请求/响应结构一律用 Pydantic 模型声明（`schemas.py`），由 FastAPI 自动校验与生成文档。
+- 请求/响应结构一律用 Pydantic 模型声明（`schemas/` 目录），由 FastAPI 自动校验与生成文档。
 
 - 健康检查统一 `GET /health`（`main.py` 内），供 K8s probe 使用，不入业务路由。
 

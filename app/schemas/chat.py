@@ -1,7 +1,6 @@
-"""Pydantic 数据模型。
+"""对话域请求/响应模型。
 
-对应学习大纲「阶段一·核心工具库」中的 pydantic v2：
-声明请求/响应结构，运行时自动校验并生成 JSON Schema。
+Agent 对话接口（POST /agent/chat）的 Pydantic 模型。
 """
 
 from pydantic import BaseModel, Field

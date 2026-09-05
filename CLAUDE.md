@@ -38,7 +38,7 @@ docker build -t python-ai-agent:latest .   # 构建服务镜像
 | `app/` | FastAPI 服务骨架（生产风格） | 遵循 `docs/12-Python开发规范.md` |
 | `app/main.py` | 应用工厂：`create_app()` + `lifespan` + 全局异常处理器 + 静态托管 | 不写业务逻辑 |
 | `app/api/routes.py` | 路由（`APIRouter` + `tags`） | 只做 HTTP 编排 |
-| `app/schemas.py` | 请求/响应 Pydantic 模型 | 字段带 `description` |
+| `app/schemas/` | 请求/响应 Pydantic 模型（按域拆分，`__init__.py` 统一导出） | 字段带 `description`，新域新建 `<域>.py` |
 | `app/dependencies.py` | 可复用 `Depends` 依赖（鉴权/会话/配置/追踪） | 新增横切能力放这里 |
 | `app/config.py` | `pydantic-settings` `Settings` 读 `.env`（含 PG/Redis/MinIO/Qdrant 连接串） | 禁止业务模块散落 `os.getenv` |
 | `app/errors.py` | 业务异常类 + 全局异常处理器 | 新异常继承 `AppError` |
