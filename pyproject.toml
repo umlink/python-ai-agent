@@ -31,6 +31,8 @@ asyncio_mode = "auto"
 target-version = "py310"
 line-length = 100
 src = ["app", "tests"]
+# 教学 Demo（code/）保留教学写法的宽松代码，不纳入工程级检查
+extend-exclude = ["code"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
@@ -48,8 +50,6 @@ extend-immutable-calls = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# 教学 Demo：允许行长与未使用变量（保留教学意图）
-"code/**/*.py" = ["E501", "F841"]
 "tests/**/*.py" = ["E501"]
 
 [tool.ruff.format]

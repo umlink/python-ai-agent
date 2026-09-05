@@ -176,22 +176,37 @@ class ChatResponse(BaseModel):
 - 全局异常处理器（`app/errors.py`）已统一输出 `ApiResponse` 结构（`data=null`），HTTP 状态码仍按语义返回（401/403/404/429/502/500）。
 - Pydantic 校验错误（422）保持 FastAPI 默认 `{"detail": ...}` 结构，**不**套业务包装，避免与标准校验语义混淆。
 
-### 4.5 流式输出（SSE）与长任务
+### 4.5 流式输出（SSE）——统一协议标准
 
-- 流式用 `StreamingResponse`，`media_type="text/event-stream"`；逐 token 由编排层以生成器传入。
+**流式接口与普通接口走两套响应约定**：普通接口统一 `ApiResponse` 包装（见 4.4）；流式接口用 SSE 帧，`event` 字段表达消息语义，负载直接放业务数据，不再重复套 `{code, message, data}`。
 
-- 长任务（RAG 检索、多步 agent）拆「提交 → 查询进度 → 获取结果」，不用单请求阻塞拖死连接。
+- 定义位置：`app/schemas/sse.py`（事件类型 `SSEEventType` + 负载模型 + 帧构造 `format_sse`）；帧构造**一律走 `format_sse()`**，禁止在路由里手拼字符串。
+- 响应头固定 `Content-Type: text/event-stream`，接口示例：`POST /agent/chat/stream`（`app/api/routes.py`）。
+- 每帧格式（两行，空行结尾）：
 
-- 编排层暴露「生成器」接口，接入层负责封装为 SSE，职责不互相侵入：
+```
+event: <事件类型>
+data: <JSON 负载>
 
-```python
-# 接入层：把编排层生成器包装成 SSE 流
-async def stream_chat(req: ChatRequest):
-    async for token in agent_stream(req.question):   # app/agents 返回 async generator
-        yield f"data: {token}\n\n"
 ```
 
-### 4.5 依赖注入（Depends）——FastAPI 核心机制
+- 事件类型与负载模型：
+
+| 事件 | 负载字段 | 语义 |
+|-|-|-|
+| `meta` | `session_id` / `model` / `trace_id` | 流开始元信息，固定第一帧 |
+| `message_start` | `{}` | 开始生成回答 |
+| `delta` | `content` | token 增量（按序拼接即完整回答） |
+| `tool_call` | `tool` / `args` | 调用工具 |
+| `tool_result` | `tool` / `result` | 工具返回结果 |
+| `done` | `finish_reason` / `usage` | 正常结束，固定最后一帧 |
+| `error` | `code` / `message` | 中途失败，data 内复用 `BizCode` 的 code/message 语义 |
+| `ping` | `{}` | 心跳保活（应对代理/客户端断流） |
+
+- 事件流转约定：`meta → message_start → (delta \| tool_call \| tool_result)* → done`；任一步出错 → 发送 `error` → 再补 `done(finish_reason=error)` 兜底，保证流一定以 `done` 收尾。
+- 长任务（RAG 检索、多步 agent）拆「提交 → 查询进度 → 获取结果」，不用单请求阻塞拖死连接。
+
+### 4.6 依赖注入（Depends）——FastAPI 核心机制
 
 **凡跨端点复用的横切能力（鉴权、会话、配置、限流），一律用** **`Depends`** **注入，禁止在路由里手动 new 对象**。这是 FastAPI 与普通 Flask/命令式项目的分水岭，也是专业项目结构的基础 [$TRAE\_REF](https://tomodahinata.com/en/blog/fastapi-project-structure-apirouter-dependencies-large-app-guide)。
 

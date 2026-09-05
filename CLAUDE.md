@@ -38,12 +38,12 @@ docker build -t python-ai-agent:latest .   # 构建服务镜像
 | `app/` | FastAPI 服务骨架（生产风格） | 遵循 `docs/12-Python开发规范.md` |
 | `app/main.py` | 应用工厂：`create_app()` + `lifespan` + 全局异常处理器 + 静态托管 | 不写业务逻辑 |
 | `app/api/routes.py` | 路由（`APIRouter` + `tags`） | 只做 HTTP 编排 |
-| `app/schemas/` | 请求/响应 Pydantic 模型（`common.py` 统一响应 `ApiResponse` + `BizCode`，其余按域拆分） | 统一响应结构 `{code, message, data, trace_id}` |
+| `app/schemas/` | 请求/响应 Pydantic 模型（`common.py` 统一响应 `ApiResponse` + `BizCode`，`sse.py` 流式协议，其余按域拆分） | 统一响应 `{code, message, data, trace_id}`；SSE 走 `format_sse()` |
 | `app/dependencies.py` | 可复用 `Depends` 依赖（鉴权/会话/配置/追踪） | 新增横切能力放这里 |
 | `app/config.py` | `pydantic-settings` `Settings` 读 `.env`（含 PG/Redis/MinIO/Qdrant 连接串） | 禁止业务模块散落 `os.getenv` |
 | `app/errors.py` | 业务异常类 + 全局异常处理器 | 新异常继承 `AppError` |
 | `app/agents/` `app/tools/` `app/storage/` | 编排层/工具层/存储层（骨架） | 依赖单向，阶段七扩展 |
-| `tests/` | pytest 单测（health/chat/config） | `pytest` 运行 |
+| `tests/` | pytest 单测（health/chat/sse/config） | `pytest` 运行 |
 | `code/阶段N/` | 教学 Demo（纯标准库优先, 可离线跑） | 命名/分层原则与生产一致 |
 | `docs/` | 学习文档（`00-12` 编号） | 非代码 |
 | `requirements.txt` | 服务侧依赖声明 | **前瞻清单**：声明按设计需要，可超前于 `app/` 当前 import；新增依赖先加这里 |
@@ -64,6 +64,7 @@ app/api（接入层） → app/agents（编排层） → app/tools（工具服�
 - **依赖注入**：跨端点复用的鉴权/会话/配置一律 `Depends(...)` 注入，禁止路由内手动 `Client()`。
 - **接口**：Pydantic 声明请求/响应 + `response_model` + `status_code` + `tags`；SSE 用 `StreamingResponse(media_type="text/event-stream")`。
 - **统一响应**：所有成功响应 `ApiResponse.ok(data)`；业务错误 `ApiResponse.fail(BizCode.XXX)`；结构 `{code, message, data, trace_id}`（见 `app/schemas/common.py`）。
+- **SSE 流式**：帧构造一律 `format_sse()`（见 `app/schemas/sse.py`），事件流转 `meta → message_start → (delta/tool_call/tool_result)* → done`，出错先发 `error` 再补 `done` 兜底；禁止路由内手拼帧字符串。
 - **异常**：继承 `AppError`（含 `biz_code` + `http_status`），`register_exception_handlers` 全局转码为统一响应（Pydantic 422 自动处理, 不自定义）。
 - **外呼**：`httpx` 必设 `timeout`；`tenacity` 指数退避重试（默认 `stop_after_attempt(3)`）；幂等才重试。
 - **日志**：统一 `loguru.logger`，带 `trace_id`；Demo 教学文件可用 `print`。

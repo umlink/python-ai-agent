@@ -10,11 +10,11 @@ dev:                ## 启动开发服务（热重载）
 test:               ## 运行单测
 	pytest
 
-lint:               ## 静态检查
+lint:               ## 静态检查（工程代码；教学 Demo 由 extend-exclude 豁免）
 	ruff check .
 
-format:             ## 自动格式化
-	ruff format .
+format:             ## 自动格式化（工程代码；教学 Demo 保持原样）
+	ruff format app tests
 
 build:              ## 构建 Docker 镜像
 	docker build -t python-ai-agent:latest .
