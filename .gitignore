@@ -16,4 +16,8 @@ venv/
 # 数据与日志
 *.log
 chroma_data/
-storage/
+/storage/
+
+# 编辑器 / 环境产物
+.trae-html-share-packages/
+.screenshots/

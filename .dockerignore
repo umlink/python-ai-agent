@@ -1,0 +1,28 @@
+# Git / 环境
+.git/
+.gitignore
+.env
+.env.example
+*.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 教学 Demo 与文档不需要进镜像
+code/
+docs/
+tests/
+
+# 数据 / 日志
+*.log
+chroma_data/
+storage/
+
+# 截图
+.screenshots/

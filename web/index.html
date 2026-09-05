@@ -102,6 +102,19 @@
       用于接口调用与 SSE 流式调试。完整接口文档见 <code>/docs</code>（Swagger）。</p>
   </header>
 
+  <div class="card" style="margin-bottom:16px">
+    <h2>接口地址 <span class="tag">可随时修改，自动记忆</span></h2>
+    <div class="row">
+      <label for="apiBase">后端 URL</label>
+      <input type="text" id="apiBase" spellcheck="false" />
+      <button id="btnSaveBase">应用</button>
+    </div>
+    <div class="status-line">
+      <span class="dot idle" id="baseDot"></span>
+      <span class="muted" id="baseHint">若前端不在后端同机访问，请把地址改成后端实际可达的地址。</span>
+    </div>
+  </div>
+
   <div class="grid">
     <!-- 健康检查 -->
     <div class="card">
@@ -159,7 +172,37 @@
 </div>
 
 <script>
-  const BASE = "http://localhost:8000";
+  // 接口地址管理：本地记忆 + 自动探测默认值
+  const BASE_KEY = "agent_api_base";
+
+  function detectDefaultBase() {
+    // 若当前页面是通过 http(s) 访问（如预览代理），优先沿用当前 host
+    if (location.protocol === "http:" || location.protocol === "https:") {
+      return location.origin;
+    }
+    // file:// 打开时默认本机后端
+    return "http://localhost:8000";
+  }
+
+  const baseInput = document.getElementById("apiBase");
+  let BASE = localStorage.getItem(BASE_KEY) || detectDefaultBase();
+  baseInput.value = BASE;
+
+  function setBase(newBase, save) {
+    BASE = newBase.replace(/\/+$/, "");
+    baseInput.value = BASE;
+    if (save) { localStorage.setItem(BASE_KEY, BASE); }
+  }
+  setBase(BASE, false); // 回填默认
+
+  const baseDot = document.getElementById("baseDot");
+  const baseHint = document.getElementById("baseHint");
+  document.getElementById("btnSaveBase").addEventListener("click", () => {
+    setBase(baseInput.value.trim(), true);
+    baseDot.className = "dot ok";
+    baseHint.textContent = "已保存：后端起于 " + BASE;
+    setTimeout(() => { baseHint.textContent = "当前接口地址：" + BASE; }, 4000);
+  });
 
   function setOutput(el, text, cls) {
     el.textContent = text;

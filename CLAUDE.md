@@ -23,23 +23,32 @@ python3 code/阶段八/project_roadmap_navigator.py
 
 # 依赖 / 质量（服务侧）
 pip install -r requirements.txt
-ruff format . && ruff check .
-pytest                                   # 关键接口单测
-```
+ruff format . && ruff check .          # 代码质量（配置在 pyproject.toml）
+pytest                               # 关键接口单测（tests/）
+
+# 工程化（可选）
+make dev / make test / make lint      # 等价上面命令的快捷方式
+docker compose up -d                  # 一键拉起 PG/Redis/MinIO/Qdrant
+docker build -t python-ai-agent:latest .   # 构建服务镜像
 
 ## 目录结构（速览）
 
 | 路径 | 定位 | 规则 |
 |-|-|-|
 | `app/` | FastAPI 服务骨架（生产风格） | 遵循 `docs/12-Python开发规范.md` |
-| `app/main.py` | 应用组装：`FastAPI()` + `include_router` + 全局异常处理器 + `lifespan` | 不写业务逻辑 |
+| `app/main.py` | 应用工厂：`create_app()` + `lifespan` + 全局异常处理器 + 静态托管 | 不写业务逻辑 |
 | `app/api/routes.py` | 路由（`APIRouter` + `tags`） | 只做 HTTP 编排 |
 | `app/schemas.py` | 请求/响应 Pydantic 模型 | 字段带 `description` |
-| `app/dependencies.py` | 可复用 `Depends` 依赖（鉴权/会话/配置） | 新增横切能力放这里 |
-| `app/config.py` | `pydantic-settings` `Settings` 读 `.env` | 禁止业务模块散落 `os.getenv` |
+| `app/dependencies.py` | 可复用 `Depends` 依赖（鉴权/会话/配置/追踪） | 新增横切能力放这里 |
+| `app/config.py` | `pydantic-settings` `Settings` 读 `.env`（含 PG/Redis/MinIO/Qdrant 连接串） | 禁止业务模块散落 `os.getenv` |
+| `app/errors.py` | 业务异常类 + 全局异常处理器 | 新异常继承 `AppError` |
+| `app/agents/` `app/tools/` `app/storage/` | 编排层/工具层/存储层（骨架） | 依赖单向，阶段七扩展 |
+| `tests/` | pytest 单测（health/chat/config） | `pytest` 运行 |
 | `code/阶段N/` | 教学 Demo（纯标准库优先, 可离线跑） | 命名/分层原则与生产一致 |
 | `docs/` | 学习文档（`00-12` 编号） | 非代码 |
 | `requirements.txt` | 服务侧依赖声明 | **前瞻清单**：声明按设计需要，可超前于 `app/` 当前 import；新增依赖先加这里 |
+| `pyproject.toml` | ruff/pytest 配置 + 项目元数据 | 新增规则在此集中管理 |
+| `Dockerfile` / `docker-compose.yml` / `Makefile` | 容器化 / 本地组件编排 / 常用命令 | 与 `.env` 组件对应 |
 
 ## 架构分层（依赖单向）
 

@@ -1,0 +1,57 @@
+[project]
+name = "python-ai-agent-learning"
+version = "0.1.0"
+description = "Python AI Agent 学习项目：FastAPI Agent 服务骨架 + 各阶段学习文档与离线 Demo"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "umlink" }]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.0",
+    "loguru>=0.7",
+    "tenacity>=8.2",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # 行长由 formatter 处理，避免与 format 冲突
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 惯用法：Depends/Query/Header 等作为参数默认值合法
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Cookie",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 教学 Demo：允许行长与未使用变量（保留教学意图）
+"code/**/*.py" = ["E501", "F841"]
+"tests/**/*.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
