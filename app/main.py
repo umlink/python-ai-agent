@@ -38,7 +38,6 @@ def create_app() -> FastAPI:
     """应用工厂：组装中间件、路由、异常处理器与静态资源。"""
     settings: Settings = get_settings_cached()
 
-
     app = FastAPI(
         title=settings.app_name,
         description="基于 FastAPI 的 Agent 服务骨架（学习大纲配套项目）",

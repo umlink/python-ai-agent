@@ -11,7 +11,7 @@
 ├─ app/                  # FastAPI 服务骨架（阶段七部署到 API 的核心）
 │  ├─ main.py            # 应用实例 + 生命周期 + 全局异常处理器
 │  ├─ config.py          # pydantic-settings 配置（读取 .env）
-│  ├─ schemas/           # 请求/响应 Pydantic 模型（按域拆分）
+│  ├─ schemas/           # 请求/响应 Pydantic 模型（common.py 统一响应 + 按域拆分）
 │  ├─ dependencies.py    # 可复用依赖（Depends：会话 / 鉴权 / 配置）
 │  ├─ api/               # 路由（routers），按资源拆分
 │  ├─ agents/            # Agent 编排层（阶段七扩展）
@@ -148,7 +148,35 @@ class ChatResponse(BaseModel):
 
 - 响应模型独立于请求模型，禁止直接复用请求模型回传多余字段。
 
-### 4.4 流式输出（SSE）与长任务
+### 4.4 统一响应封装与业务状态码
+
+**所有接口成功响应统一用 `ApiResponse` 包装**，结构固定为：
+
+```json
+{"code": 0, "message": "成功", "data": { ... }, "trace_id": "abc123"}
+```
+
+- 定义位置：`app/schemas/common.py`（`ApiResponse` 泛型 + `BizCode` 枚举）。
+- `code` 为**业务状态码**（与 HTTP 状态码解耦）：`0` 成功，`4xxxx` 客户端侧错误，`5xxxx` 服务端侧错误。
+- `message` 为对调用方可读的状态描述；`data` 成功时携带业务数据、失败时为 `null`；`trace_id` 贯穿日志与存储。
+- 成功用 `ApiResponse.ok(data, trace_id=...)`，失败用 `ApiResponse.fail(BizCode.XXX, ...)`。
+- 业务状态码集中在 `BizCode` 枚举管理，**禁止在代码里散落魔法数字**；新增错误在枚举追加一项。
+
+| 业务状态码 | 含义 | 关联异常 |
+|-|-|-|
+| `0` | 成功 | - |
+| `40001` | 参数校验失败 | -（Pydantic 自动 422） |
+| `40101` | 未授权访问 | `UnauthorizedError` |
+| `40301` | 无权限操作 | `ForbiddenError` |
+| `40401` | 资源不存在 | `KnowledgeNotFound` |
+| `42901` | 请求过于频繁 | `RateLimited` |
+| `50201` | 外部依赖失败 | `ToolCallFailed` |
+| `50000` | 服务内部错误 | `AppError` / 兜底 |
+
+- 全局异常处理器（`app/errors.py`）已统一输出 `ApiResponse` 结构（`data=null`），HTTP 状态码仍按语义返回（401/403/404/429/502/500）。
+- Pydantic 校验错误（422）保持 FastAPI 默认 `{"detail": ...}` 结构，**不**套业务包装，避免与标准校验语义混淆。
+
+### 4.5 流式输出（SSE）与长任务
 
 - 流式用 `StreamingResponse`，`media_type="text/event-stream"`；逐 token 由编排层以生成器传入。
 
@@ -336,16 +364,17 @@ def fetch(day: str) -> dict:                      # GET 幂等 → 可安全重�
 
 ```python
 # app/errors.py —— 集中定义自定义异常与全局处理器
-class ToolCallFailed(Exception):
-    """工具调用失败, 语义化异常由全局处理器转 502"""
+class AppError(Exception):
+    biz_code: BizCode = BizCode.INTERNAL_ERROR   # 关联业务状态码
+    http_status: int = 500
 
-@app.exception_handler(ToolCallFailed)
-async def tool_failed_handler(req: Request, exc: ToolCallFailed):
-    logger.error("tool failed: {}", exc)
-    return JSONResponse(status_code=502, content={"detail": f"外部依赖失败: {exc}"})
+class ToolCallFailed(AppError):
+    biz_code = BizCode.TOOL_FAILED               # 50201 → HTTP 502
+    http_status = 502
 
-# main.py 注册
-app.add_exception_handler(ToolCallFailed, tool_failed_handler)
+# main.py 注册（register_exception_handlers 统一注册）
+# 处理器输出统一 ApiResponse 结构，HTTP 状态码按语义返回：
+# {"code": 50201, "message": "外部依赖失败", "data": null, "trace_id": ...}
 ```
 
 - Pydantic 校验错误由 FastAPI 自动转 422，无需自定义；只对**业务异常**注册处理器。

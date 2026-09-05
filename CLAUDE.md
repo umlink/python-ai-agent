@@ -38,7 +38,7 @@ docker build -t python-ai-agent:latest .   # 构建服务镜像
 | `app/` | FastAPI 服务骨架（生产风格） | 遵循 `docs/12-Python开发规范.md` |
 | `app/main.py` | 应用工厂：`create_app()` + `lifespan` + 全局异常处理器 + 静态托管 | 不写业务逻辑 |
 | `app/api/routes.py` | 路由（`APIRouter` + `tags`） | 只做 HTTP 编排 |
-| `app/schemas/` | 请求/响应 Pydantic 模型（按域拆分，`__init__.py` 统一导出） | 字段带 `description`，新域新建 `<域>.py` |
+| `app/schemas/` | 请求/响应 Pydantic 模型（`common.py` 统一响应 `ApiResponse` + `BizCode`，其余按域拆分） | 统一响应结构 `{code, message, data, trace_id}` |
 | `app/dependencies.py` | 可复用 `Depends` 依赖（鉴权/会话/配置/追踪） | 新增横切能力放这里 |
 | `app/config.py` | `pydantic-settings` `Settings` 读 `.env`（含 PG/Redis/MinIO/Qdrant 连接串） | 禁止业务模块散落 `os.getenv` |
 | `app/errors.py` | 业务异常类 + 全局异常处理器 | 新异常继承 `AppError` |
@@ -63,7 +63,8 @@ app/api（接入层） → app/agents（编排层） → app/tools（工具服�
 - **配置**：`pydantic-settings`（`BaseSettings` + `SettingsConfigDict(env_file=".env")`），不用 `python-dotenv` 手写加载。
 - **依赖注入**：跨端点复用的鉴权/会话/配置一律 `Depends(...)` 注入，禁止路由内手动 `Client()`。
 - **接口**：Pydantic 声明请求/响应 + `response_model` + `status_code` + `tags`；SSE 用 `StreamingResponse(media_type="text/event-stream")`。
-- **异常**：业务异常自定义类 + `@app.exception_handler` 全局转码（Pydantic 422 自动处理, 不自定义）。
+- **统一响应**：所有成功响应 `ApiResponse.ok(data)`；业务错误 `ApiResponse.fail(BizCode.XXX)`；结构 `{code, message, data, trace_id}`（见 `app/schemas/common.py`）。
+- **异常**：继承 `AppError`（含 `biz_code` + `http_status`），`register_exception_handlers` 全局转码为统一响应（Pydantic 422 自动处理, 不自定义）。
 - **外呼**：`httpx` 必设 `timeout`；`tenacity` 指数退避重试（默认 `stop_after_attempt(3)`）；幂等才重试。
 - **日志**：统一 `loguru.logger`，带 `trace_id`；Demo 教学文件可用 `print`。
 - **空结果**：如实报空、勿编造，禁止模型补齐不存在的数据。
