@@ -91,8 +91,6 @@ def extract_json(text: str) -> str:
         return text[start:end + 1]
     return text
 
-    # 复杂嵌套 JSON 建议用第三方如 `jsonformer`, 见进阶
-
 class Weather(BaseModel):
     city: str
     temp: float
@@ -162,8 +160,8 @@ class RateLimitError(Exception):   # 自定义: 服务商限流
     pass
 
 @retry(
-    stop=stop_after_attempt(3),               # 最多重试3次(共4次尝试)
-    wait=wait_exponential(multiplier=1, max=8), # 等待 1s→2s→4s→8s 指数退避
+    stop=stop_after_attempt(3),               # 总共最多尝试3次(含首次, 即最多重试2次)
+    wait=wait_exponential(multiplier=1, max=8), # 等待 2s→4s→8s 指数退避(max=8封顶)
     retry=retry_if_exception_type((httpx.TimeoutException,
                                    httpx.ConnectError,
                                    RateLimitError)),

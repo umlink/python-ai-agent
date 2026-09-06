@@ -124,6 +124,8 @@ def query_rewrite(llm, raw_question: str) -> str:
 
 _cache: dict = {}                          # ② 简单内存缓存(生产用Redis带TTL)
 
+> ⚠️ 以下代码引用了阶段四 02 定义的 `embed_bge`、`query_rewrite` 及向量库对象 `vector_col`，需先补全这些依赖再整体运行（本片段演示链路，**非自包含**）。
+
 def retrieve(question: str, vector_col, llm, ttl: int = 600) -> dict:
     """带 改写+缓存+溯源 的检索入口"""
     key = hashlib.md5(question.encode()).hexdigest()

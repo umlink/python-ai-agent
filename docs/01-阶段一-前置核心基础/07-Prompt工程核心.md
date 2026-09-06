@@ -99,6 +99,8 @@ sequenceDiagram
 - **⚠️ 工具调用消息对（最常见坑）**：模型的 `tool_calls` 请求与 `role=tool` 的结果回传必须**成对**出现，且 `tool_call_id` 一一对应——缺一个配对下一轮直接报错。
 - **并行工具调用**：模型一次返回多个 `tool_calls` 时，程序侧应循环全部执行再统一回传。
 
+> ⚠️ 本示例为**完整链路示意**，`client`(OpenAI 实例)、`msgs`(消息列表)、`execute_tool`(工具执行函数) 需按前文或阶段二定义；此片段聚焦展示 `tool_calls` 与 `role=tool` 的配对关系。
+
 ```python
 # 方框: 给模型声明一个工具 (OpenAI function calling 风格)
 tools = [{
@@ -190,7 +192,7 @@ safe_prompt = guard_external_content(raw_web_page_text)
 # 注入检测(简易): 识别常见的"忽略以上指令"类字眼
 import re
 if re.search(r"忽略(以上|前面).*指令|你的.*系统提示", raw_web_page_text, re.I):
-    logger.warning("检测到疑似prompt注入, 已隔离")
+    logger.warning("检测到疑似prompt注入, 已隔离")   # logger 需先 import: from loguru import logger
 ```
 
 ## 本节自检

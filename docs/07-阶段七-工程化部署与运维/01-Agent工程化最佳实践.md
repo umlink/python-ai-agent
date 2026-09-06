@@ -51,7 +51,7 @@ class ToolRegistry:
         tool = cls._tools.get(name)
         if tool is None:
             return None
-        if role_level(user_role) < role_level(tool["permission"]):
+        if role_level(user_role) < role_level(tool["permission"]):   # role_level 为示意函数(比较权限级别), 需自行定义
             return None                          # 权限拦截
         return tool["fn"]
 

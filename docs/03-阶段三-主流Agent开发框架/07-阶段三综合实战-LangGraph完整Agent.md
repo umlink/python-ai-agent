@@ -15,7 +15,7 @@ pip install langgraph langchain-openai langchain-community loguru
 ## 一次运行能学到什么
 
 ```bash
-python3 react_langgraph_agent.py
+python3 code/阶段三/react_langgraph_agent.py
 ```
 
 你会看到如下日志，这正是阶段三第 2 讲那张"图"的真实运行:
@@ -54,7 +54,7 @@ class ScriptedAgentModel(FakeListChatModel):
                "北京今天晴，气温26°C，高温加4后是30。" ]
 ```
 
-- 用 LangChain 官方的 `FakeListChatModel`，按剧本顺序返回每一条回复；够用后重复最后一个。
+- 用 LangChain 的 `FakeListChatModel` 按剧本顺序返回回复（离线演示，不依赖真实 API）。⚠️ 该模型已标记废弃，新代码建议改用 `GenericFakeChatModel`；示例仅演示离线流程，理解不受影响。
 - `make_model()` 里再用一层包装，把剧本 JSON 翻译成真正的 `AIMessage(tool_calls=...)`，这样 LangGraph 的 `should_continue` 才能读到 `last.tool_calls` 并路由去 `ToolNode`。
 - **为什么这么设计**：让循环在"不依赖真实 API"下完整跑起来。切真模型只需换 `build_agent(llm=真模型)`。
 

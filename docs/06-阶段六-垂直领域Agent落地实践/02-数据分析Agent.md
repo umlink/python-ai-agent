@@ -81,8 +81,8 @@ def defend_and_run(gen_sql: str, params: tuple, db) -> str:
     # ② SQL 白名单: 只许 SELECT/WITH 开头
     if not sql.upper().startswith(ALLOWED_PREFIX):
         return "拒绝: 仅允许只读查询(SELECT/WITH)"
-    # ③ 参数化示例: where region = ? 的值走占位符
-    #    (真实代码由 cursor.execute(sql, params) 传参, 绝不拼接)
+    # ③ 参数化: 真实生产用占位符 + cursor.execute(sql, params) 传参, 绝不拼接用户输入;
+    #    本 mini 版为演示简化, WHERE 值直接内联在 SQL 文本里, 切生产必须真正参数化
     try:
         result = db.execute(sql, params)          # 参数化执行
         # ④ 结果校验: 空结果或行数异常时提示, 而不是硬答

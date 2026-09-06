@@ -121,9 +121,9 @@ def execute_tool(name: str, args: dict) -> str:
     """统一工具执行入口: 永远返回一个'能喂给模型的消息'。"""
     try:
         if name == "search":
-            return _search(args["query"])
+            return _search(args["query"])        # _search 为本项目自定义工具函数, 示意需自实现
         if name == "send_email":
-            return _send_email(args)      # 高危: 内部会先要人工确认
+            return _send_email(args)      # 高危: 内部会先要人工确认; 函数本身示意需自实现
         return f"未知工具: {name}"
     except TimeoutError:
         # 超时 → 封装成消息让模型决定重试或换思路, 而不是崩掉循环
@@ -170,6 +170,7 @@ while True:
 # 人机协作: 高危操作前暂停
 def confirm(action: str) -> bool:
     """高危操作需要人工确认。生产里这里会弹一个审批。"""
+    # ⚠️ input() 是阻塞式交互, 自动化/无 TTY 环境会卡住; 生产请改走审批接口(如飞书/钉钉审批、Webhook)
     return input(f"高危操作 {action}, 确认执行? (y/n) ") == "y"
 
 if confirm("DELETE FROM users"):

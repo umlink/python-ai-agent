@@ -17,7 +17,7 @@
 
 ### 1. 安装与全局配置
 
-- `pip install llama-index llama-index-llms-openai llama-index-embeddings-openai`
+- `pip install llama-index llama-index-llms-openai llama-index-embeddings-openai llama-index-embeddings-huggingface`（末位包为下方 `HuggingFaceEmbedding` 所需，缺它 import 会失败）
 - 中文语料建议开源中文 Embedding：`HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")`（免 API 费、中文效果更好）。
 - 0.10 前后 API 差异巨大，认准新版写法（Settings 全局配置）。
 

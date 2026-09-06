@@ -52,7 +52,7 @@ print(should_use_framework(["需要断点续跑", "需要人类审批"]))  # Tru
 |-|-|-|-|
 | LangGraph | 以「图」（Node 节点 + Edge 边）组织流程，状态驱动、支持持久化与中断恢复，企业生产首选 | State≈工作记忆，Node≈执行动作，Checkpointer≈记忆持久化 | "把 Agent 画成一张流程图" |
 | CrewAI | 强调「角色化」多 Agent：角色 / 目标 / 背景故事，Crew 编排协作，上手快 | 自定义状态流转弱 | "给 Agent 写角色卡" |
-| AutoGen | Agent 之间用自然语言「对话」协作，内置代码沙箱，适合研究与原型 | 生产注意沙箱安全 | "让 Agent 们互相聊天" |
+| AutoGen | Agent 之间用自然语言「对话」协作，内置代码沙箱，适合研究与原型 | 生产注意沙箱安全；⚠️ 已进入维护模式，官方新框架为 Microsoft Agent Framework | "让 Agent 们互相聊天" |
 | LlamaIndex | 数据 + RAG 一体化框架，文档知识问答做检索层最顺 | 常配 LangGraph 编排 | "知识库的瑞士军刀" |
 | Dify | 低代码平台，拖拽编排，适合快速验证 | 灵活性受平台限制 | "拖拽搭 Agent" |
 

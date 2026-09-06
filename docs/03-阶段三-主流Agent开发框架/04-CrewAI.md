@@ -80,6 +80,8 @@ result = crew.kickoff({"topic": "AI Agent"})   # 启动! 传入全局输入
 print(result.raw)                     # 最终交付物文本
 ```
 
+> 注：`crew.kickoff({...})` 传全局输入、`result.raw` 取最终文本，属**较新 CrewAI** 的形态；旧版 `kickoff` 返回 `dict`，取值方式不同（请以你安装的版本为准）。
+
 ### 3. Process（执行流程）
 
 #### 3.1 两种流程对比

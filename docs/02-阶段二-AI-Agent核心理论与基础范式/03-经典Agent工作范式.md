@@ -39,7 +39,7 @@ import json
 import re
 from openai import OpenAI
 
-client = OpenAI(api_key="YOUR_KEY")
+client = OpenAI(api_key="YOUR_KEY")   # 替换为真实 Key, 或改用 os.environ["OPENAI_API_KEY"]；也可直接跑仓库离线版 code/阶段二/react_agent.py
 
 # ========== 第 1 步: 声明唯一一个工具 ==========
 TOOLS = [{
@@ -163,7 +163,7 @@ def reflexion_agent(task: str, max_attempts: int = 3):
         if result is not None:
             return result                  # 成功直接返回
         # 失败: 让模型复盘, 把结论作为下一轮的"教训"
-        reflection = reflect(task, result)
+        reflection = reflect(task, result)   # reflect() 为本例未给出的复盘函数, 需自行实现
     raise RuntimeError("多次尝试仍失败")
 ```
 

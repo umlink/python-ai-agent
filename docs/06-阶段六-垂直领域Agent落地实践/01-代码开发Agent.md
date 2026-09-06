@@ -85,9 +85,9 @@ REPO_ROOT = "/opt/workspace/repo"
 
 def safe_write(rel_path: str, content: str) -> str:
     """带路径穿越防护 + diff 预览的写文件"""
-    # ① 防路径穿越: 规范化后必须仍在仓库根目录内
+    # ① 防路径穿越: 规范化后必须仍在仓库根目录内(用 commonpath, 避免 startswith 对共享前缀兄弟目录误放行)
     abs_path = os.path.normpath(os.path.join(REPO_ROOT, rel_path))
-    if not abs_path.startswith(REPO_ROOT):
+    if os.path.commonpath([abs_path, REPO_ROOT]) != REPO_ROOT:
         return "拒绝: 路径越出仓库根目录"
     # ② 生成 diff 预览(简化: 直接展示新旧差异, 生产用 difflib)
     old = open(abs_path).read() if os.path.exists(abs_path) else ""

@@ -29,7 +29,7 @@
 - 2024-11：Anthropic 开源发布 MCP，首批参考 Server（GitHub / Postgres / 文件系统等）；
 - 2025-03：OpenAI 宣布采纳（ChatGPT、Agents SDK 原生 MCP 客户端）；
 - 2025-04：Google 确认 Gemini 支持；此后 Microsoft / AWS / Cloudflare / Snowflake 等跟进；
-- 治理权移交 Linux Foundation，社区 MCP Server 超过 1 万个；
+- 2025-12：治理权移交至 Linux Foundation 旗下的 **Agentic AI Foundation（AAIF）**（Anthropic / OpenAI / Block 等联合发起），社区 MCP Server 超过 1 万个；
 - 2026 年现状：MCP 已是 Agent 接入外部工具的事实标准，ChatGPT 的 MCP 连接器已演化为「apps」生态。
 
 **与本大纲工具工厂的关系**（关键认知，防混淆）：
@@ -128,6 +128,7 @@ async def main():
         }
     ) as client:
         tools = client.get_tools()
+        model = ChatOpenAI(model="gpt-4o")   # 需 import: from langchain_openai import ChatOpenAI
         agent = create_react_agent(model, tools)  # 用法与本地工具完全一致
         result = await agent.ainvoke({"messages": [("user", "搜一下 LangGraph 最新版本")]})
         print(result["messages"][-1].content)
@@ -139,6 +140,7 @@ asyncio.run(main())
 **OpenAI Agents SDK** 原生支持 MCP 客户端（这也是 2025-03 OpenAI 采纳后的直接产物）：
 
 ```python
+# 依赖: pip install openai-agents
 from agents import Agent, Runner
 from agents.mcp import MCPServerStdio
 

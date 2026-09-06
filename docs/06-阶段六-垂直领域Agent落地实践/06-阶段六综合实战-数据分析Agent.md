@@ -100,7 +100,7 @@ def defend_and_execute(question, retries=0):
 
 运行输出能看到：
 - 语义层命中：`公司营收是多少 → SQL: SELECT SUM(amount) ...`
-- 五道防线：`[营收] ok → [{'revenue': 2490.5}]`
+- 五道防线：`[营收] ok → [{'revenue': 1730.5}]`
 - 注入拦截：`[被注入生成 DELETE] rejected`
 - 空结果拦截：`empty`
 
@@ -117,12 +117,12 @@ def defend_and_execute(question, retries=0):
   退款笔数 → SELECT COUNT(*) FROM orders WHERE status='refunded'
 
 >>> 五道防线演示
-  [营收]  ok → [{'revenue': 2490.5}]
+  [营收]  ok → [{'revenue': 1730.5}]
   [被注入生成 DELETE]  {'status': 'rejected', 'reason': '仅为只读查询'}
   [空结果]  {'status': 'empty', 'message': '查询为空, 请核实条件后再答'}
 
 >>> 可视化扩展
-   已生成 bar 图, 数据点 1 条: [{'revenue': 2490.5}]
+   已生成 bar 图, 数据点 1 条: [{'revenue': 1730.5}]
 ```
 
 ## 换真实模型 / 真实数据库只需改 4 点

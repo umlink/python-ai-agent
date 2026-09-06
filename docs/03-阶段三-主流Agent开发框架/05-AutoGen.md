@@ -13,7 +13,9 @@
 
 ## 学习内容详情
 
-> 版本说明：**本文对应 AutoGen 0.2.x 经典 API（`pip install pyautogen`）**；0.4+ 为全新 async API，写法不同，差异速查见第 5 节「AutoGen 0.4+ 迁移对照」。
+> ⚠️ **重要状态提示（2026 年必读）**：微软已把 AutoGen 与 Semantic Kernel **合并为 Microsoft Agent Framework（MAF）**，并于 2026 年 4 月发布 1.0；此后 AutoGen / Semantic Kernel 进入**维护模式**（不再新增特性），官方明确建议**新项目转向 MAF**。AutoGen 的 0.2 / 0.4 思路（对话式多智能体、代码执行安全、`TERMINATE` 约定）与 MAF 一脉相承，**其底层机制仍值得学习**；但**做选型、上生产时请优先考虑 MAF**。本文保留 AutoGen 教程，用于理解「对话式多智能体」的机理。
+>
+> 版本说明：**本文主体对应 AutoGen 0.2.x 经典 API（`pip install pyautogen`）**；0.4+ 为全新 async API，写法不同，差异速查见第 5 节「AutoGen 0.4+ 迁移对照」。
 
 ### 1. 核心理念
 
@@ -175,7 +177,9 @@ async def main() -> None:
 asyncio.run(main())   # 脚本入口统一用 asyncio.run 收束; Jupyter 中可直接 await main()
 ```
 
-> ⚠️ **装包前先看包名**：0.2.x 教程在网络上大量存在（标志：`pip install pyautogen` + `initiate_chat`），搜到的代码先判断版本再照抄。官方迁移指南：https://microsoft.github.io/autogen/0.4.7/user-guide/agentchat-user-guide/migration-guide.html
+> ⚠️ **装包前先看包名**：0.2.x 教程在网络上大量存在（标志：`pip install pyautogen` + `initiate_chat`），搜到的代码先判断版本再照抄。官方迁移指南（0.2 → 0.4）：https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/migration-guide.html
+>
+> ⚠️ **新项目选型注意**：AutoGen 已进入维护模式，官方推荐的新一代框架是 **Microsoft Agent Framework**，迁移文档见 https://microsoft.github.io/agent-framework/ 。若要新起项目，建议直接从 MAF 开始。
 
 ## 本节自检
 

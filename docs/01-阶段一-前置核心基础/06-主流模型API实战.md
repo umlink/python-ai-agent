@@ -60,7 +60,7 @@ from anthropic import Anthropic
 client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 resp = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-20250514",           # 如需最新可替换为 Claude Sonnet 4.5 系列 ID（见官方 docs）
     max_tokens=1024,                              # 必传: 限制输出长度
     system="你是一位严谨的技术助手。",               # 差异1: system 是顶层参数, 不塞进 messages
     messages=[{"role": "user", "content": "用一句话介绍 Agent"}],
@@ -213,7 +213,7 @@ print(resp.choices[0].message.content)
 def ask_llm_structured(prompt: str, max_try: int = 3):
     import json
     for i in range(max_try):
-        out = local.chat.completions.create(
+        out = local.chat.completions.create(   # local 为上文定义的本地 OpenAI 客户端(跨节依赖, 需先定义)
             model="qwen2.5:7b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,       # 结构化输出调低

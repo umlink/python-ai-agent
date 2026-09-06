@@ -15,7 +15,7 @@
 
 ## 学习内容详情
 
-> 版本说明：以下基于 LangChain 0.3.x API 基线（该大版本 API 稳定，后续小版本兼容），0.1 及以下 API 差异较大；认准 LCEL 与 LangGraph，旧教程的 `LLMChain` / `initialize_agent` 已废弃。
+> 版本说明：LangChain / LangGraph 已于 2025 年 10 月发布 **1.0**（`langchain` 包重构，聚焦内置 Agent 架构）。本文示例基于稳定的 **LCEL 核心 API**，在 0.3.x 与 1.0 之间均兼容；`LLMChain` / `initialize_agent` 等旧接口已废弃，切记不要照抄旧教程。认准 LCEL、`@tool` 与 LangGraph 的 `StateGraph`。
 
 ### 1. ChatModel（模型封装）
 

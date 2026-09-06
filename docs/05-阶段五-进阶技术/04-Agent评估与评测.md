@@ -188,6 +188,8 @@ RAG 效果光看「答案对不对」不够，还要拆开看「检索质量」�
 - **answer_relevancy（答案相关性）**：答案是否切题；
 - **context_precision / context_recall（检索质量）**：召回的片段里多少真有用 / 该召回的召回了多少——直接定位「是检索的锅还是生成的锅」。
 
+> ⚠️ **版本提示**：以下示例对应 Ragas **≤0.1.x 的旧式声明式 API**（`from ragas.metrics import faithfulness`）。Ragas 0.4+ 已把指标重构为**类式 API**（如 `AnswerRelevancy` / `ResponseRelevancy` 等类及对应 `Input/Output`），导入路径与指标名有所变化。实际使用时请按所装版本，以官方迁移文档为准：https://docs.ragas.io/en/stable/howtos/migrations/migrate_from_v0_to_v1/
+
 ```python
 # pip install ragas
 from ragas import evaluate
