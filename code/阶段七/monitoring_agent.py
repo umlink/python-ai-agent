@@ -218,9 +218,9 @@ def main():
     golden = evaluate_golden(mat)
     for k, v in golden.items():
         print(f"  {k}: {v}")
-    print("  P95 vs 均值:", round(statistics.mean(mat.all_latencies()), 3),
-          " vs ", round(min(sorted(mat.all_latencies())[int(len(mat.all_latencies())*0.95)],
-                            sorted(mat.all_latencies())[-1]), 3))
+    p95 = min(sorted(mat.all_latencies())[int(len(mat.all_latencies())*0.95)],
+              sorted(mat.all_latencies())[-1])
+    print("  P95 vs 均值:", round(p95, 3), " vs ", round(statistics.mean(mat.all_latencies()), 3))
     # 简化: P95 已含在 golden["P95延迟"], 上面那行仅示意长尾对比
 
     # 3. Bad-case 闭环(周迭代)

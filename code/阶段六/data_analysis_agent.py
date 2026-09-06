@@ -47,8 +47,11 @@ def execute_read(query: str):
     """
     # 解析 "SUM(amount)" / "COUNT(*)";按 region 分组求和, 演示口径
     m = re.search(r"region\s*=\s*'([^']+)'", query)
+    sm = re.search(r"status\s*=\s*'([^']+)'", query)   # 解析 status 条件(与语义层口径一致)
     q = re.search(r"(SUM)\(amount\)", query, re.I)
     rows = ORDERS if not m else [r for r in ORDERS if r["region"] == m.group(1)]
+    if sm:                                                # 按 status 过滤
+        rows = [r for r in rows if r["status"] == sm.group(1)]
     if q and q.group(1).upper() == "SUM":          # 求和
         return [{"revenue": round(sum(r["amount"] for r in rows), 2)}]
     if "COUNT" in query.upper():                   # 计数
